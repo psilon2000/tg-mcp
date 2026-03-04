@@ -14,6 +14,7 @@ class Settings:
     session_path: Path
     default_chat: str | None
     twofa_password: str | None
+    write_chat_whitelist: tuple[str, ...]
 
 
 def load_settings() -> Settings:
@@ -24,6 +25,9 @@ def load_settings() -> Settings:
     session_path = Path(os.getenv("TG_SESSION_PATH", ".tg_string_session.txt").strip())
     default_chat = os.getenv("TG_DEFAULT_CHAT", "").strip() or None
     twofa_password = os.getenv("TG_2FA_PASSWORD", "").strip() or None
+    write_chat_whitelist = tuple(
+        item.strip() for item in os.getenv("TG_WRITE_CHAT_WHITELIST", "").split(",") if item.strip()
+    )
 
     try:
         api_id = int(api_id_raw)
@@ -41,4 +45,5 @@ def load_settings() -> Settings:
         session_path=session_path,
         default_chat=default_chat,
         twofa_password=twofa_password,
+        write_chat_whitelist=write_chat_whitelist,
     )

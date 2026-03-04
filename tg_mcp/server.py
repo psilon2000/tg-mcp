@@ -23,10 +23,24 @@ def _resolve_chat(chat: str | None) -> str:
     raise ValueError("chat is required when TG_DEFAULT_CHAT is not set")
 
 
+def _ensure_write_allowed(chat: str, confirm: bool) -> None:
+    if not confirm:
+        raise ValueError("write requires explicit confirm=true")
+
+    if not settings.write_chat_whitelist:
+        raise ValueError("write whitelist is empty: set TG_WRITE_CHAT_WHITELIST")
+
+    if chat not in settings.write_chat_whitelist:
+        raise ValueError(
+            f"chat '{chat}' is not in write whitelist"
+        )
+
+
 @mcp.tool()
-async def tg_send_message(text: str, chat: str | None = None) -> dict[str, Any]:
-    """Send message to Telegram chat/channel."""
+async def tg_send_message(text: str, chat: str | None = None, confirm: bool = False) -> dict[str, Any]:
+    """Send message to Telegram chat/channel (whitelist + confirm required)."""
     target = _resolve_chat(chat)
+    _ensure_write_allowed(target, confirm)
     result = await bridge.send_message(target, text)
     return {"status": "ok", **result}
 

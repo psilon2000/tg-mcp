@@ -29,6 +29,7 @@ Set:
 - `TG_API_HASH`
 - `TG_SESSION_PATH` (default `.tg_string_session.txt`)
 - optional `TG_DEFAULT_CHAT` (chat id or @username)
+- `TG_WRITE_CHAT_WHITELIST` (comma-separated chats allowed for writes; for example `me,@my_bot,123456789`)
 
 ## Login Once
 
@@ -56,12 +57,16 @@ The server runs over stdio.
 
 ## Tools
 
-- `tg_send_message(text, chat=None)`
+- `tg_send_message(text, chat=None, confirm=False)`
 - `tg_read_messages(chat=None, limit=20, since=None)`
 - `tg_wait_reply(after_id, timeout_sec=30, chat=None)`
 - `tg_auth_status()`
 
 If `chat` is omitted, server uses `TG_DEFAULT_CHAT`.
+
+Write safety rules for `tg_send_message`:
+- `confirm` must be explicitly set to `true`.
+- target chat must be present in `TG_WRITE_CHAT_WHITELIST`.
 
 ## Example Flow
 
