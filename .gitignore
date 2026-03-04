@@ -1,0 +1,6 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.tg_string_session
+.tg_string_session.txt

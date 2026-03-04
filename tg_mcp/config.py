@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+@dataclass(frozen=True)
+class Settings:
+    api_id: int
+    api_hash: str
+    session_path: Path
+    default_chat: str | None
+    twofa_password: str | None
+
+
+def load_settings() -> Settings:
+    load_dotenv()
+
+    api_id_raw = os.getenv("TG_API_ID", "0").strip()
+    api_hash = os.getenv("TG_API_HASH", "").strip()
+    session_path = Path(os.getenv("TG_SESSION_PATH", ".tg_string_session.txt").strip())
+    default_chat = os.getenv("TG_DEFAULT_CHAT", "").strip() or None
+    twofa_password = os.getenv("TG_2FA_PASSWORD", "").strip() or None
+
+    try:
+        api_id = int(api_id_raw)
+    except ValueError as exc:
+        raise RuntimeError("TG_API_ID must be an integer") from exc
+
+    if api_id <= 0:
+        raise RuntimeError("TG_API_ID is required")
+    if not api_hash:
+        raise RuntimeError("TG_API_HASH is required")
+
+    return Settings(
+        api_id=api_id,
+        api_hash=api_hash,
+        session_path=session_path,
+        default_chat=default_chat,
+        twofa_password=twofa_password,
+    )
