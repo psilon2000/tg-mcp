@@ -5,6 +5,7 @@ MCP server (Python + Telethon) for Telegram chat automation.
 It supports:
 - sending commands/messages to a target chat,
 - reading recent messages,
+- listing chats from a Telegram folder,
 - waiting for a bot reply after a sent command,
 - one-time login with saved StringSession.
 
@@ -59,6 +60,7 @@ The server runs over stdio.
 
 - `tg_send_message(text, chat=None, confirm=False)`
 - `tg_read_messages(chat=None, limit=20, since=None)`
+- `tg_list_folder_chats(folder, limit=200)`
 - `tg_wait_reply(after_id, timeout_sec=30, chat=None)`
 - `tg_auth_status()`
 
@@ -67,6 +69,36 @@ If `chat` is omitted, server uses `TG_DEFAULT_CHAT`.
 Write safety rules for `tg_send_message`:
 - `confirm` must be explicitly set to `true`.
 - target chat must be present in `TG_WRITE_CHAT_WHITELIST`.
+
+`tg_list_folder_chats` behavior:
+- `folder` supports case-insensitive partial matching.
+- if partial match returns multiple folders, tool tries exact match (case-insensitive).
+- if exact disambiguation still fails, tool returns `folder_ambiguous` with candidates.
+- if folder exists but has no chats, tool returns `status=ok`, `count=0`, `chats=[]`.
+- `limit` must be in range `1..500`.
+
+Example:
+
+```json
+{
+  "folder": "Module",
+  "folder_id": 3,
+  "count": 2,
+  "chats": [
+    {
+      "chat_id": -100123,
+      "title": "ЦР Внедрение",
+      "username": null,
+      "is_channel": true,
+      "unread_count": 0,
+      "folder_id": 3,
+      "pinned": false,
+      "last_message_date": "2026-03-06T09:00:00+00:00",
+      "entity_type": "Channel"
+    }
+  ]
+}
+```
 
 ## Example Flow
 

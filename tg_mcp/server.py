@@ -59,6 +59,16 @@ async def tg_read_messages(chat: str | None = None, limit: int = 20, since: str 
 
 
 @mcp.tool()
+async def tg_list_folder_chats(folder: str, limit: int = 200) -> dict[str, Any]:
+    """List chats from Telegram folder by name."""
+    result = await bridge.list_folder_chats(folder=folder, limit=limit)
+    return {
+        "status": "ok",
+        **result,
+    }
+
+
+@mcp.tool()
 async def tg_wait_reply(after_id: int, timeout_sec: int = 30, chat: str | None = None) -> dict[str, Any]:
     """Wait for first message with id greater than after_id."""
     target = _resolve_chat(chat)
