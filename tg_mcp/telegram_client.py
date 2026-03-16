@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+import mimetypes
+from pathlib import Path
+from typing import Any, Iterable, cast
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -64,8 +66,8 @@ class TelegramBridge:
                 lang_code="en",
             )
             await client.connect()
-            if not await client.is_user_authorized():
-                await client.disconnect()
+            if not await _is_user_authorized(client):
+                await _disconnect_client(client)
                 raise RuntimeError(
                     "Telegram session is not authorized. Run 'python -m tg_mcp.login' first "
                     "or copy a valid .tg_string_session.txt into TG_SESSION_PATH."
@@ -77,22 +79,49 @@ class TelegramBridge:
     async def disconnect(self) -> None:
         async with self._lock:
             if self._client is not None:
-                await self._client.disconnect()
+                await _disconnect_client(self._client)
                 self._client = None
 
     async def send_message(self, chat: str, text: str) -> dict[str, Any]:
         client = await self.ensure_connected()
-        entity = await self._resolve_entity(client, chat)
-        message = await client.send_message(entity, text)
+        entity = cast(Any, await self._resolve_entity(client, chat))
+        client_any = cast(Any, client)
+        message = await client_any.send_message(entity, text)
         return {
             "chat": chat,
             "message_id": message.id,
             "date": _to_iso(message.date),
         }
 
+    async def send_file(self, chat: str, file_path: str | Path | Iterable[str | Path], caption: str | None = None) -> dict[str, Any]:
+        paths = _normalize_file_paths(file_path)
+        for path in paths:
+            if not path.exists():
+                raise ValueError(f"file_not_found: '{path}'")
+            if not path.is_file():
+                raise ValueError(f"not_a_file: '{path}'")
+
+        client = await self.ensure_connected()
+        entity = cast(Any, await self._resolve_entity(client, chat))
+        client_any = cast(Any, client)
+        files_arg: Any = paths[0] if len(paths) == 1 else paths
+        sent = await client_any.send_file(entity, file=files_arg, caption=caption)
+        messages = sent if isinstance(sent, list) else [sent]
+        attachments = [_build_attachment_payload(path, message) for path, message in zip(paths, messages, strict=True)]
+        result = {
+            "chat": chat,
+            "caption": caption,
+            "attachment_count": len(attachments),
+            "attachments": attachments,
+        }
+        if attachments:
+            result.update(attachments[0])
+        return result
+
     async def read_messages(self, chat: str, limit: int = 20, since_iso: str | None = None) -> list[TgMessage]:
         client = await self.ensure_connected()
-        entity = await self._resolve_entity(client, chat)
+        entity = cast(Any, await self._resolve_entity(client, chat))
+        client_any = cast(Any, client)
 
         if limit < 1:
             limit = 1
@@ -102,7 +131,7 @@ class TelegramBridge:
         since_dt = _parse_since(since_iso)
         result: list[TgMessage] = []
 
-        async for m in client.iter_messages(entity, limit=limit):
+        async for m in client_any.iter_messages(entity, limit=limit):
             if since_dt is not None and m.date is not None:
                 msg_dt = _to_utc(m.date)
                 if msg_dt < since_dt:
@@ -310,3 +339,52 @@ def _get_chat_id(entity: Any) -> int:
     if isinstance(raw_id, int):
         return raw_id
     return 0
+
+
+def _normalize_file_paths(file_path: str | Path | Iterable[str | Path]) -> list[Path]:
+    if isinstance(file_path, (str, Path)):
+        values = [file_path]
+    else:
+        values = list(file_path)
+
+    if not values:
+        raise ValueError("file_path is required")
+
+    return [Path(value).expanduser() for value in values]
+
+
+def _build_attachment_payload(path: Path, message: Any) -> dict[str, Any]:
+    return {
+        "message_id": message.id,
+        "date": _to_iso(message.date),
+        "file_name": path.name,
+        "file_size": path.stat().st_size,
+        "attachment_type": _detect_attachment_type(path),
+    }
+
+
+def _detect_attachment_type(path: Path) -> str:
+    mime_type, _ = mimetypes.guess_type(path.name)
+    if mime_type is None:
+        return "document"
+    major_type = mime_type.split("/", 1)[0]
+    if major_type == "image":
+        return "photo"
+    if major_type == "video":
+        return "video"
+    if major_type == "audio":
+        return "audio"
+    return "document"
+
+
+async def _disconnect_client(client: TelegramClient) -> None:
+    result = client.disconnect()
+    if asyncio.iscoroutine(result):
+        await result
+
+
+async def _is_user_authorized(client: TelegramClient) -> bool:
+    result = client.is_user_authorized()
+    if asyncio.iscoroutine(result):
+        return bool(await result)
+    return bool(result)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 import unittest
 
 from tg_mcp.config import Settings
@@ -49,8 +50,8 @@ class ListFolderChatsTests(unittest.IsolatedAsyncioTestCase):
         async def fake_load_folders(_client):
             return [TgFolder(id=7, name="Module")]
 
-        bridge.ensure_connected = fake_ensure_connected
-        bridge._load_folders = fake_load_folders
+        cast(Any, bridge).ensure_connected = fake_ensure_connected
+        cast(Any, bridge)._load_folders = fake_load_folders
 
         result = await bridge.list_folder_chats(folder="mod", limit=10)
 
@@ -70,8 +71,8 @@ class ListFolderChatsTests(unittest.IsolatedAsyncioTestCase):
         async def fake_load_folders(_client):
             return [TgFolder(id=7, name="Module")]
 
-        bridge.ensure_connected = fake_ensure_connected
-        bridge._load_folders = fake_load_folders
+        cast(Any, bridge).ensure_connected = fake_ensure_connected
+        cast(Any, bridge)._load_folders = fake_load_folders
 
         result = await bridge.list_folder_chats(folder="module", limit=50)
         self.assertEqual(result["count"], 0)
@@ -103,8 +104,8 @@ class ListFolderChatsTests(unittest.IsolatedAsyncioTestCase):
         async def fake_load_folders(_client):
             return [TgFolder(id=7, name="Module")]
 
-        bridge.ensure_connected = fake_ensure_connected
-        bridge._load_folders = fake_load_folders
+        cast(Any, bridge).ensure_connected = fake_ensure_connected
+        cast(Any, bridge)._load_folders = fake_load_folders
 
         result = await bridge.list_folder_chats(folder="module", limit=10)
         self.assertIsNone(result["chats"][0]["username"])
@@ -119,6 +120,7 @@ def _test_settings() -> Settings:
         default_chat=None,
         twofa_password=None,
         write_chat_whitelist=(),
+        file_send_roots=(),
     )
 
 

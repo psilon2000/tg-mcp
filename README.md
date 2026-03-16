@@ -4,6 +4,7 @@ MCP server (Python + Telethon) for Telegram chat automation.
 
 It supports:
 - sending commands/messages to a target chat,
+- sending file attachments,
 - reading recent messages,
 - listing chats from a Telegram folder,
 - waiting for a bot reply after a sent command,
@@ -31,6 +32,7 @@ Set:
 - `TG_SESSION_PATH` (default `.tg_string_session.txt`)
 - optional `TG_DEFAULT_CHAT` (chat id or @username)
 - `TG_WRITE_CHAT_WHITELIST` (comma-separated chats allowed for writes; for example `me,@my_bot,123456789`)
+- optional `TG_FILE_SEND_ROOTS` (comma-separated directories allowed for file uploads; when unset, only absolute file paths are accepted)
 
 ## Login Once
 
@@ -59,6 +61,7 @@ The server runs over stdio.
 ## Tools
 
 - `tg_send_message(text, chat=None, confirm=False)`
+- `tg_send_file(file_path=None, file_paths=None, caption=None, chat=None, confirm=False)`
 - `tg_read_messages(chat=None, limit=20, since=None)`
 - `tg_list_folder_chats(folder, limit=200)`
 - `tg_wait_reply(after_id, timeout_sec=30, chat=None)`
@@ -66,9 +69,31 @@ The server runs over stdio.
 
 If `chat` is omitted, server uses `TG_DEFAULT_CHAT`.
 
-Write safety rules for `tg_send_message`:
+Write safety rules for `tg_send_message` and `tg_send_file`:
 - `confirm` must be explicitly set to `true`.
 - target chat must be present in `TG_WRITE_CHAT_WHITELIST`.
+
+`tg_send_file` behavior:
+- accepts either one `file_path` or multiple `file_paths`.
+- every path must point to an existing regular file.
+- if `TG_FILE_SEND_ROOTS` is set, resolved file path must stay inside one of those directories.
+- if `TG_FILE_SEND_ROOTS` is not set, `file_path` must be absolute.
+- `caption` is optional and sent as the Telegram attachment caption.
+- response includes `caption`, `attachment_count`, and per-file metadata in `attachments` with `attachment_type`.
+
+Example:
+
+```json
+{
+  "file_paths": [
+    "/mnt/d/repository/tg-mcp/README.md",
+    "/mnt/d/repository/tg-mcp/.env.example"
+  ],
+  "caption": "Current MCP docs",
+  "chat": "me",
+  "confirm": true
+}
+```
 
 `tg_list_folder_chats` behavior:
 - `folder` supports case-insensitive partial matching.

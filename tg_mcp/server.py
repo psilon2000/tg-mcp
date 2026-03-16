@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -36,12 +37,75 @@ def _ensure_write_allowed(chat: str, confirm: bool) -> None:
         )
 
 
+def _resolve_send_file_path(file_path: str) -> Path:
+    raw_value = (file_path or "").strip()
+    if not raw_value:
+        raise ValueError("file_path is required")
+
+    candidate = Path(raw_value).expanduser()
+    if settings.file_send_roots:
+        resolved = candidate.resolve()
+        for root in settings.file_send_roots:
+            try:
+                resolved.relative_to(root)
+                return resolved
+            except ValueError:
+                continue
+
+        allowed = ", ".join(str(root) for root in settings.file_send_roots)
+        raise ValueError(
+            f"file_path '{resolved}' is outside allowed roots: {allowed}"
+        )
+
+    if not candidate.is_absolute():
+        raise ValueError(
+            "file_path must be absolute when TG_FILE_SEND_ROOTS is not set"
+        )
+
+    return candidate.resolve()
+
+
+def _resolve_send_file_paths(
+    file_path: str | None = None,
+    file_paths: list[str] | None = None,
+) -> list[Path]:
+    values: list[str] = []
+    if file_path is not None:
+        values.append(file_path)
+    if file_paths is not None:
+        values.extend(file_paths)
+
+    if not values:
+        raise ValueError("file_path or file_paths is required")
+
+    resolved: list[Path] = []
+    for value in values:
+        resolved.append(_resolve_send_file_path(value))
+    return resolved
+
+
 @mcp.tool()
 async def tg_send_message(text: str, chat: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Send message to Telegram chat/channel (whitelist + confirm required)."""
     target = _resolve_chat(chat)
     _ensure_write_allowed(target, confirm)
     result = await bridge.send_message(target, text)
+    return {"status": "ok", **result}
+
+
+@mcp.tool()
+async def tg_send_file(
+    file_path: str | None = None,
+    file_paths: list[str] | None = None,
+    caption: str | None = None,
+    chat: str | None = None,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    """Send file attachment to Telegram chat/channel (whitelist + confirm required)."""
+    target = _resolve_chat(chat)
+    _ensure_write_allowed(target, confirm)
+    resolved_paths = _resolve_send_file_paths(file_path=file_path, file_paths=file_paths)
+    result = await bridge.send_file(target, resolved_paths, caption=caption)
     return {"status": "ok", **result}
 
 
