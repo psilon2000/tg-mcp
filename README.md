@@ -3,6 +3,7 @@
 MCP server (Python + Telethon) for Telegram chat automation.
 
 It supports:
+- creating a regular private Telegram group,
 - sending commands/messages to a target chat,
 - sending file attachments,
 - reading recent messages,
@@ -60,6 +61,7 @@ The server runs over stdio.
 
 ## Tools
 
+- `tg_create_group(title)`
 - `tg_send_message(text, chat=None, confirm=False)`
 - `tg_send_file(file_path=None, file_paths=None, caption=None, chat=None, confirm=False)`
 - `tg_read_messages(chat=None, limit=20, since=None)`
@@ -68,6 +70,21 @@ The server runs over stdio.
 - `tg_auth_status()`
 
 If `chat` is omitted, server uses `TG_DEFAULT_CHAT`.
+
+`tg_create_group` behavior:
+- creates a regular private Telegram group from the authorized user account in `TG_SESSION_PATH`.
+- accepts one required parameter: `title`.
+- rejects empty or whitespace-only titles locally.
+- returns `status`, `chat_id`, and `title`.
+- does not require `confirm` or whitelist in the current MVP.
+
+Example:
+
+```json
+{
+  "title": "Launch Squad"
+}
+```
 
 Write safety rules for `tg_send_message` and `tg_send_file`:
 - `confirm` must be explicitly set to `true`.
@@ -131,3 +148,10 @@ Example:
 2. Take returned `message_id`.
 3. Call `tg_wait_reply(after_id=<message_id>)`.
 4. Call `tg_read_messages(limit=20)` for context.
+
+## Real Telegram E2E
+
+- `tests/test_create_group_e2e.py` uses a live Telegram session and is skipped by default.
+- Run it only manually with `TG_RUN_REAL_E2E=1`.
+- The test creates a group named `tg-mcp-e2e-<timestamp>`.
+- Cleanup is manual for now: archive or delete the test group from Telegram after the run.

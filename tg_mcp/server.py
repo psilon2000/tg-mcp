@@ -94,6 +94,13 @@ async def tg_send_message(text: str, chat: str | None = None, confirm: bool = Fa
 
 
 @mcp.tool()
+async def tg_create_group(title: str) -> dict[str, Any]:
+    """Create a regular private Telegram group."""
+    result = await bridge.create_group(title)
+    return {"status": "ok", **result}
+
+
+@mcp.tool()
 async def tg_send_file(
     file_path: str | None = None,
     file_paths: list[str] | None = None,

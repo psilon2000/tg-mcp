@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, cast
 
 from telethon import TelegramClient
+from telethon.tl.functions.messages import CreateChatRequest
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import GetDialogFiltersRequest
 from telethon.utils import get_peer_id
@@ -91,6 +92,19 @@ class TelegramBridge:
             "chat": chat,
             "message_id": message.id,
             "date": _to_iso(message.date),
+        }
+
+    async def create_group(self, title: str) -> dict[str, Any]:
+        normalized_title = _normalize_group_title(title)
+
+        client = await self.ensure_connected()
+        client_any = cast(Any, client)
+        result = await client_any(CreateChatRequest(users=[], title=normalized_title))
+        chat = _extract_created_chat(result)
+
+        return {
+            "chat_id": _get_chat_id(chat),
+            "title": _extract_chat_title(chat) or normalized_title,
         }
 
     async def send_file(self, chat: str, file_path: str | Path | Iterable[str | Path], caption: str | None = None) -> dict[str, Any]:
@@ -292,6 +306,13 @@ def _parse_int(value: str) -> int | None:
         return None
 
 
+def _normalize_group_title(title: str) -> str:
+    normalized = (title or "").strip()
+    if not normalized:
+        raise ValueError("invalid_title: title must be non-empty")
+    return normalized
+
+
 def _extract_folder_name(dialog_filter: Any) -> str:
     title = getattr(dialog_filter, "title", None)
     if isinstance(title, str):
@@ -339,6 +360,26 @@ def _get_chat_id(entity: Any) -> int:
     if isinstance(raw_id, int):
         return raw_id
     return 0
+
+
+def _extract_chat_title(entity: Any) -> str:
+    title = getattr(entity, "title", None)
+    if isinstance(title, str):
+        return title.strip()
+    return ""
+
+
+def _extract_created_chat(result: Any) -> Any:
+    chats = getattr(result, "chats", None)
+    if isinstance(chats, list) and chats:
+        return chats[0]
+
+    updates = getattr(result, "updates", None)
+    update_chats = getattr(updates, "chats", None)
+    if isinstance(update_chats, list) and update_chats:
+        return update_chats[0]
+
+    raise RuntimeError("create_group_failed: Telegram API did not return created chat")
 
 
 def _normalize_file_paths(file_path: str | Path | Iterable[str | Path]) -> list[Path]:
