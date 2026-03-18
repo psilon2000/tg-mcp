@@ -15,6 +15,7 @@ class Settings:
     default_chat: str | None
     twofa_password: str | None
     write_chat_whitelist: tuple[str, ...]
+    admin_chat_whitelist: tuple[str, ...]
     file_send_roots: tuple[Path, ...]
 
 
@@ -28,6 +29,9 @@ def load_settings() -> Settings:
     twofa_password = os.getenv("TG_2FA_PASSWORD", "").strip() or None
     write_chat_whitelist = tuple(
         item.strip() for item in os.getenv("TG_WRITE_CHAT_WHITELIST", "").split(",") if item.strip()
+    )
+    admin_chat_whitelist = tuple(
+        item.strip() for item in os.getenv("TG_ADMIN_CHAT_WHITELIST", "").split(",") if item.strip()
     )
     file_send_roots = tuple(
         Path(item.strip()).expanduser().resolve()
@@ -52,5 +56,6 @@ def load_settings() -> Settings:
         default_chat=default_chat,
         twofa_password=twofa_password,
         write_chat_whitelist=write_chat_whitelist,
+        admin_chat_whitelist=admin_chat_whitelist,
         file_send_roots=file_send_roots,
     )

@@ -120,6 +120,7 @@ def _test_settings() -> Settings:
         default_chat=None,
         twofa_password=None,
         write_chat_whitelist=(),
+        admin_chat_whitelist=(),
         file_send_roots=(),
     )
 

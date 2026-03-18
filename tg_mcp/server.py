@@ -37,6 +37,31 @@ def _ensure_write_allowed(chat: str, confirm: bool) -> None:
         )
 
 
+def _resolve_required_chat(chat: str | None) -> str:
+    value = (chat or "").strip()
+    if not value:
+        raise ValueError("chat is required")
+    return value
+
+
+def _resolve_required_member(member: str) -> str:
+    value = (member or "").strip()
+    if not value:
+        raise ValueError("member is required")
+    return value
+
+
+def _ensure_admin_allowed(chat: str, confirm: bool) -> None:
+    if not confirm:
+        raise ValueError("admin write requires explicit confirm=true")
+
+    if not settings.admin_chat_whitelist:
+        raise ValueError("admin whitelist is empty: set TG_ADMIN_CHAT_WHITELIST")
+
+    if chat not in settings.admin_chat_whitelist:
+        raise ValueError(f"chat '{chat}' is not in admin whitelist")
+
+
 def _resolve_send_file_path(file_path: str) -> Path:
     raw_value = (file_path or "").strip()
     if not raw_value:
@@ -97,6 +122,26 @@ async def tg_send_message(text: str, chat: str | None = None, confirm: bool = Fa
 async def tg_create_group(title: str) -> dict[str, Any]:
     """Create a regular private Telegram group."""
     result = await bridge.create_group(title)
+    return {"status": "ok", **result}
+
+
+@mcp.tool()
+async def tg_add_group_member(chat: str, member: str, confirm: bool = False) -> dict[str, Any]:
+    """Add a member to an admin-whitelisted Telegram group."""
+    target = _resolve_required_chat(chat)
+    resolved_member = _resolve_required_member(member)
+    _ensure_admin_allowed(target, confirm)
+    result = await bridge.add_group_member(target, resolved_member)
+    return {"status": "ok", **result}
+
+
+@mcp.tool()
+async def tg_remove_group_member(chat: str, member: str, confirm: bool = False) -> dict[str, Any]:
+    """Remove a member from an admin-whitelisted Telegram group."""
+    target = _resolve_required_chat(chat)
+    resolved_member = _resolve_required_member(member)
+    _ensure_admin_allowed(target, confirm)
+    result = await bridge.remove_group_member(target, resolved_member)
     return {"status": "ok", **result}
 
 

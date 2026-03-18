@@ -8,9 +8,12 @@ from pathlib import Path
 from typing import Any, Iterable, cast
 
 from telethon import TelegramClient
+from telethon.tl.functions.channels import EditBannedRequest, InviteToChannelRequest
 from telethon.tl.functions.messages import CreateChatRequest
+from telethon.tl.functions.messages import AddChatUserRequest, DeleteChatUserRequest
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import GetDialogFiltersRequest
+from telethon.tl.types import ChatBannedRights
 from telethon.utils import get_peer_id
 
 from .config import Settings
@@ -105,6 +108,51 @@ class TelegramBridge:
         return {
             "chat_id": _get_chat_id(chat),
             "title": _extract_chat_title(chat) or normalized_title,
+        }
+
+    async def add_group_member(self, chat: str, member: str) -> dict[str, Any]:
+        normalized_member = _normalize_member(member)
+
+        client = await self.ensure_connected()
+        group = cast(Any, await self._resolve_entity(client, chat))
+        member_entity = await self._resolve_member_input(client, normalized_member)
+        client_any = cast(Any, client)
+
+        if _is_basic_group(group):
+            await client_any(AddChatUserRequest(chat_id=_get_group_id(group), user_id=member_entity, fwd_limit=0))
+        elif _is_channel_group(group):
+            await client_any(InviteToChannelRequest(channel=group, users=[member_entity]))
+        else:
+            raise ValueError(f"unsupported_chat_type: '{type(group).__name__}'")
+
+        return {
+            "chat": chat,
+            "member": normalized_member,
+            "action": "add",
+        }
+
+    async def remove_group_member(self, chat: str, member: str) -> dict[str, Any]:
+        normalized_member = _normalize_member(member)
+
+        client = await self.ensure_connected()
+        group = cast(Any, await self._resolve_entity(client, chat))
+        member_entity = await self._resolve_member_input(client, normalized_member)
+        client_any = cast(Any, client)
+
+        if _is_basic_group(group):
+            await client_any(DeleteChatUserRequest(chat_id=_get_group_id(group), user_id=member_entity, revoke_history=False))
+        elif _is_channel_group(group):
+            banned_rights = ChatBannedRights(until_date=None, view_messages=True)
+            await client_any(EditBannedRequest(channel=group, participant=member_entity, banned_rights=banned_rights))
+            unbanned_rights = ChatBannedRights(until_date=None, view_messages=False)
+            await client_any(EditBannedRequest(channel=group, participant=member_entity, banned_rights=unbanned_rights))
+        else:
+            raise ValueError(f"unsupported_chat_type: '{type(group).__name__}'")
+
+        return {
+            "chat": chat,
+            "member": normalized_member,
+            "action": "remove",
         }
 
     async def send_file(self, chat: str, file_path: str | Path | Iterable[str | Path], caption: str | None = None) -> dict[str, Any]:
@@ -279,6 +327,12 @@ class TelegramBridge:
 
         raise ValueError(f"Cannot find any entity corresponding to '{chat}'")
 
+    async def _resolve_member_input(self, client: TelegramClient, member: str):
+        try:
+            return await client.get_input_entity(_parse_int(member) if _parse_int(member) is not None else member)
+        except Exception as exc:
+            raise ValueError(f"member_not_found: '{member}'") from exc
+
 
 def _to_iso(dt: datetime | None) -> str:
     if dt is None:
@@ -310,6 +364,13 @@ def _normalize_group_title(title: str) -> str:
     normalized = (title or "").strip()
     if not normalized:
         raise ValueError("invalid_title: title must be non-empty")
+    return normalized
+
+
+def _normalize_member(member: str) -> str:
+    normalized = (member or "").strip()
+    if not normalized:
+        raise ValueError("member is required")
     return normalized
 
 
@@ -367,6 +428,21 @@ def _extract_chat_title(entity: Any) -> str:
     if isinstance(title, str):
         return title.strip()
     return ""
+
+
+def _is_basic_group(entity: Any) -> bool:
+    return type(entity).__name__ == "Chat"
+
+
+def _is_channel_group(entity: Any) -> bool:
+    return type(entity).__name__ == "Channel" and bool(getattr(entity, "megagroup", False))
+
+
+def _get_group_id(entity: Any) -> int:
+    raw_id = getattr(entity, "id", None)
+    if isinstance(raw_id, int):
+        return raw_id
+    raise ValueError(f"unsupported_chat_type: '{type(entity).__name__}'")
 
 
 def _extract_created_chat(result: Any) -> Any:

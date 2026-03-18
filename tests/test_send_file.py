@@ -323,6 +323,7 @@ class SendFileToolTests(unittest.IsolatedAsyncioTestCase):
 def _test_settings(
     file_send_roots: tuple[Path, ...] = (),
     write_chat_whitelist: tuple[str, ...] = (),
+    admin_chat_whitelist: tuple[str, ...] = (),
 ) -> Settings:
     return Settings(
         api_id=1,
@@ -331,6 +332,7 @@ def _test_settings(
         default_chat=None,
         twofa_password=None,
         write_chat_whitelist=write_chat_whitelist,
+        admin_chat_whitelist=admin_chat_whitelist,
         file_send_roots=file_send_roots,
     )
 

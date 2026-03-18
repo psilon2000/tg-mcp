@@ -52,6 +52,7 @@ class SendFileE2ETests(unittest.IsolatedAsyncioTestCase):
             default_chat="me",
             twofa_password=None,
             write_chat_whitelist=("me",),
+            admin_chat_whitelist=(),
             file_send_roots=(),
         )
         server_module.bridge = _BridgeStub()

@@ -4,6 +4,7 @@ MCP server (Python + Telethon) for Telegram chat automation.
 
 It supports:
 - creating a regular private Telegram group,
+- adding/removing members in admin-whitelisted Telegram groups,
 - sending commands/messages to a target chat,
 - sending file attachments,
 - reading recent messages,
@@ -33,6 +34,7 @@ Set:
 - `TG_SESSION_PATH` (default `.tg_string_session.txt`)
 - optional `TG_DEFAULT_CHAT` (chat id or @username)
 - `TG_WRITE_CHAT_WHITELIST` (comma-separated chats allowed for writes; for example `me,@my_bot,123456789`)
+- `TG_ADMIN_CHAT_WHITELIST` (comma-separated groups allowed for member admin operations; for example `Ops,@team_group,-1001234567890`)
 - optional `TG_FILE_SEND_ROOTS` (comma-separated directories allowed for file uploads; when unset, only absolute file paths are accepted)
 
 ## Login Once
@@ -62,6 +64,8 @@ The server runs over stdio.
 ## Tools
 
 - `tg_create_group(title)`
+- `tg_add_group_member(chat, member, confirm=False)`
+- `tg_remove_group_member(chat, member, confirm=False)`
 - `tg_send_message(text, chat=None, confirm=False)`
 - `tg_send_file(file_path=None, file_paths=None, caption=None, chat=None, confirm=False)`
 - `tg_read_messages(chat=None, limit=20, since=None)`
@@ -78,6 +82,33 @@ If `chat` is omitted, server uses `TG_DEFAULT_CHAT`.
 - returns `status`, `chat_id`, and `title`.
 - does not require `confirm` or whitelist in the current MVP.
 
+`tg_add_group_member` / `tg_remove_group_member` behavior:
+- require explicit `chat`, `member`, and `confirm=true`.
+- require target `chat` to be present in `TG_ADMIN_CHAT_WHITELIST`.
+- `member` accepts `@username` or numeric id.
+- support regular groups and megagroups; unsupported chat types return `unsupported_chat_type`.
+- return `status`, `chat`, `member`, and `action`.
+
+Example add:
+
+```json
+{
+  "chat": "Ops",
+  "member": "@alice",
+  "confirm": true
+}
+```
+
+Example remove:
+
+```json
+{
+  "chat": "Ops",
+  "member": "123456789",
+  "confirm": true
+}
+```
+
 Example:
 
 ```json
@@ -89,6 +120,10 @@ Example:
 Write safety rules for `tg_send_message` and `tg_send_file`:
 - `confirm` must be explicitly set to `true`.
 - target chat must be present in `TG_WRITE_CHAT_WHITELIST`.
+
+Admin safety rules for `tg_add_group_member` and `tg_remove_group_member`:
+- `confirm` must be explicitly set to `true`.
+- target chat must be present in `TG_ADMIN_CHAT_WHITELIST`.
 
 `tg_send_file` behavior:
 - accepts either one `file_path` or multiple `file_paths`.
@@ -155,3 +190,6 @@ Example:
 - Run it only manually with `TG_RUN_REAL_E2E=1`.
 - The test creates a group named `tg-mcp-e2e-<timestamp>`.
 - Cleanup is manual for now: archive or delete the test group from Telegram after the run.
+- `tests/test_group_member_admin_e2e.py` also uses a live Telegram session and is skipped by default.
+- For member admin live tests, set `TG_REAL_ADMIN_TEST_CHAT` and `TG_REAL_ADMIN_TEST_MEMBER` to a dedicated non-production group and test account.
+- Cleanup for member admin live tests is manual: return the test member/group to the expected state after the run.
