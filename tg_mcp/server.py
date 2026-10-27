@@ -109,12 +109,49 @@ def _resolve_send_file_paths(
     return resolved
 
 
+def _resolve_download_output_dir(output_dir: str) -> Path:
+    raw_value = (output_dir or "").strip()
+    if not raw_value:
+        raise ValueError("output_dir is required")
+
+    candidate = Path(raw_value).expanduser()
+    if settings.file_download_roots:
+        resolved = candidate.resolve()
+        for root in settings.file_download_roots:
+            try:
+                resolved.relative_to(root)
+                return resolved
+            except ValueError:
+                continue
+
+        allowed = ", ".join(str(root) for root in settings.file_download_roots)
+        raise ValueError(
+            f"output_dir '{resolved}' is outside allowed roots: {allowed}"
+        )
+
+    if not candidate.is_absolute():
+        raise ValueError(
+            "output_dir must be absolute when TG_FILE_DOWNLOAD_ROOTS is not set"
+        )
+
+    return candidate.resolve()
+
+
 @mcp.tool()
-async def tg_send_message(text: str, chat: str | None = None, confirm: bool = False) -> dict[str, Any]:
+async def tg_send_message(
+    text: str,
+    chat: str | None = None,
+    reply_to_message_id: int | None = None,
+    confirm: bool = False,
+) -> dict[str, Any]:
     """Send message to Telegram chat/channel (whitelist + confirm required)."""
     target = _resolve_chat(chat)
     _ensure_write_allowed(target, confirm)
-    result = await bridge.send_message(target, text)
+    result = await bridge.send_message(
+        target,
+        text,
+        reply_to_message_id=reply_to_message_id,
+    )
     return {"status": "ok", **result}
 
 
@@ -162,10 +199,44 @@ async def tg_send_file(
 
 
 @mcp.tool()
-async def tg_read_messages(chat: str | None = None, limit: int = 20, since: str | None = None) -> dict[str, Any]:
-    """Read latest messages from Telegram chat/channel."""
+async def tg_download_attachment(
+    message_id: int,
+    output_dir: str,
+    chat: str | None = None,
+) -> dict[str, Any]:
+    """Download file attachment from a Telegram message."""
     target = _resolve_chat(chat)
-    messages = await bridge.read_messages(target, limit=limit, since_iso=since)
+    resolved_output_dir = _resolve_download_output_dir(output_dir)
+    result = await bridge.download_attachment(target, message_id=message_id, output_dir=resolved_output_dir)
+    return {"status": "ok", **result}
+
+
+@mcp.tool()
+async def tg_read_messages(
+    chat: str | None = None,
+    limit: int = 20,
+    since: str | None = None,
+    until: str | None = None,
+    offset_id: int | None = None,
+    message_id: int | None = None,
+    message_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    """Read Telegram messages by recent range, date window, offset, or exact ids."""
+    target = _resolve_chat(chat)
+    ids: list[int] = []
+    if message_id is not None:
+        ids.append(message_id)
+    if message_ids is not None:
+        ids.extend(message_ids)
+
+    messages = await bridge.read_messages(
+        target,
+        limit=limit,
+        since_iso=since,
+        until_iso=until,
+        offset_id=offset_id,
+        message_ids=ids or None,
+    )
     return {
         "status": "ok",
         "chat": target,

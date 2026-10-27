@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 import unittest
 
+from telethon.tl.types import PeerUser
+
 from tg_mcp.config import Settings
 from tg_mcp.telegram_client import TelegramBridge, TgFolder
 
@@ -19,7 +21,28 @@ class _FakeClient:
             yield dialog
 
 
+class _FakeDialogFilters:
+    def __init__(self, filters):
+        self.filters = filters
+
+
 class ListFolderChatsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_load_folders_supports_dialog_filters_wrapper(self) -> None:
+        bridge = TelegramBridge(_test_settings())
+
+        class _FakeFolderClient:
+            async def __call__(self, _request):
+                return _FakeDialogFilters(
+                    [
+                        SimpleNamespace(id=7, title=SimpleNamespace(text="Module")),
+                        SimpleNamespace(id=8, title=SimpleNamespace(text="Other")),
+                    ]
+                )
+
+        folders = await bridge._load_folders(cast(Any, _FakeFolderClient()))
+
+        self.assertEqual(folders, [TgFolder(id=7, name="Module"), TgFolder(id=8, name="Other")])
+
     async def test_returns_chats_with_extended_fields(self) -> None:
         bridge = TelegramBridge(_test_settings())
         dialogs = [
@@ -110,6 +133,34 @@ class ListFolderChatsTests(unittest.IsolatedAsyncioTestCase):
         result = await bridge.list_folder_chats(folder="module", limit=10)
         self.assertIsNone(result["chats"][0]["username"])
         self.assertEqual(result["chats"][0]["last_message_date"], "")
+
+    async def test_matches_folder_by_peer_ids_when_dialog_folder_id_missing(self) -> None:
+        bridge = TelegramBridge(_test_settings())
+        dialogs = [
+            SimpleNamespace(
+                folder_id=None,
+                entity=PeerUser(user_id=777),
+                name="Peer Matched",
+                is_channel=False,
+                unread_count=2,
+                pinned=False,
+                message=None,
+            )
+        ]
+        fake_client = _FakeClient(dialogs)
+
+        async def fake_ensure_connected():
+            return fake_client
+
+        async def fake_load_folders(_client):
+            return [TgFolder(id=7, name="Module", peer_ids=frozenset({777}))]
+
+        cast(Any, bridge).ensure_connected = fake_ensure_connected
+        cast(Any, bridge)._load_folders = fake_load_folders
+
+        result = await bridge.list_folder_chats(folder="module", limit=10)
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["chats"][0]["chat_id"], 777)
 
 
 def _test_settings() -> Settings:

@@ -320,6 +320,81 @@ class SendFileToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls["caption"], "bundle")
 
 
+class SendMessageBridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_send_message_supports_reply_to(self) -> None:
+        bridge = TelegramBridge(_test_settings())
+
+        class _FakeMessageClient:
+            def __init__(self) -> None:
+                self.last_entity: Any = None
+                self.last_text: Any = None
+                self.last_kwargs: dict[str, Any] | None = None
+
+            async def send_message(self, entity, text, **kwargs):
+                self.last_entity = entity
+                self.last_text = text
+                self.last_kwargs = kwargs
+                return SimpleNamespace(id=123, date=datetime(2026, 3, 26, 8, 50, tzinfo=timezone.utc))
+
+        fake_client = _FakeMessageClient()
+
+        async def fake_ensure_connected():
+            return fake_client
+
+        async def fake_resolve_entity(_client, chat):
+            return f"entity:{chat}"
+
+        cast(Any, bridge).ensure_connected = fake_ensure_connected
+        cast(Any, bridge)._resolve_entity = fake_resolve_entity
+
+        result = await bridge.send_message("me", "hello", reply_to_message_id=42)
+
+        self.assertEqual(result["chat"], "me")
+        self.assertEqual(result["message_id"], 123)
+        self.assertEqual(fake_client.last_entity, "entity:me")
+        self.assertEqual(fake_client.last_text, "hello")
+        self.assertEqual(fake_client.last_kwargs, {"reply_to": 42})
+
+
+class SendMessageToolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_sends_reply_to_via_bridge(self) -> None:
+        import tg_mcp.server as server_module
+
+        calls: dict[str, Any] = {}
+
+        class _BridgeStub:
+            async def send_message(self, chat, text, reply_to_message_id=None):
+                calls["chat"] = chat
+                calls["text"] = text
+                calls["reply_to_message_id"] = reply_to_message_id
+                return {
+                    "chat": chat,
+                    "message_id": 321,
+                    "date": "2026-03-26T08:51:00+00:00",
+                }
+
+        original_settings = server_module.settings
+        original_bridge = server_module.bridge
+        server_module.settings = _test_settings(write_chat_whitelist=("me",))
+        server_module.bridge = _BridgeStub()
+        try:
+            result = await server_module.tg_send_message(
+                "hello",
+                chat="me",
+                reply_to_message_id=42,
+                confirm=True,
+            )
+        finally:
+            server_module.settings = original_settings
+            server_module.bridge = original_bridge
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["message_id"], 321)
+        self.assertEqual(calls["chat"], "me")
+        self.assertEqual(calls["text"], "hello")
+        self.assertEqual(calls["reply_to_message_id"], 42)
+
+
 def _test_settings(
     file_send_roots: tuple[Path, ...] = (),
     write_chat_whitelist: tuple[str, ...] = (),
@@ -334,6 +409,7 @@ def _test_settings(
         write_chat_whitelist=write_chat_whitelist,
         admin_chat_whitelist=admin_chat_whitelist,
         file_send_roots=file_send_roots,
+        file_download_roots=(),
     )
 
 

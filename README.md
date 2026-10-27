@@ -7,6 +7,7 @@ It supports:
 - adding/removing members in admin-whitelisted Telegram groups,
 - sending commands/messages to a target chat,
 - sending file attachments,
+- downloading file attachments from messages,
 - reading recent messages,
 - listing chats from a Telegram folder,
 - waiting for a bot reply after a sent command,
@@ -36,6 +37,7 @@ Set:
 - `TG_WRITE_CHAT_WHITELIST` (comma-separated chats allowed for writes; for example `me,@my_bot,123456789`)
 - `TG_ADMIN_CHAT_WHITELIST` (comma-separated groups allowed for member admin operations; for example `Ops,@team_group,-1001234567890`)
 - optional `TG_FILE_SEND_ROOTS` (comma-separated directories allowed for file uploads; when unset, only absolute file paths are accepted)
+- optional `TG_FILE_DOWNLOAD_ROOTS` (comma-separated directories allowed for downloaded attachments; when unset, only absolute output directories are accepted)
 
 ## Login Once
 
@@ -66,9 +68,10 @@ The server runs over stdio.
 - `tg_create_group(title)`
 - `tg_add_group_member(chat, member, confirm=False)`
 - `tg_remove_group_member(chat, member, confirm=False)`
-- `tg_send_message(text, chat=None, confirm=False)`
+- `tg_send_message(text, chat=None, reply_to_message_id=None, confirm=False)`
 - `tg_send_file(file_path=None, file_paths=None, caption=None, chat=None, confirm=False)`
-- `tg_read_messages(chat=None, limit=20, since=None)`
+- `tg_download_attachment(message_id, output_dir, chat=None)`
+- `tg_read_messages(chat=None, limit=20, since=None, until=None, offset_id=None, message_id=None, message_ids=None)`
 - `tg_list_folder_chats(folder, limit=200)`
 - `tg_wait_reply(after_id, timeout_sec=30, chat=None)`
 - `tg_auth_status()`
@@ -121,6 +124,21 @@ Write safety rules for `tg_send_message` and `tg_send_file`:
 - `confirm` must be explicitly set to `true`.
 - target chat must be present in `TG_WRITE_CHAT_WHITELIST`.
 
+`tg_send_message` behavior:
+- `reply_to_message_id` is optional.
+- when set, the message is sent as a reply to that Telegram message id.
+
+Example:
+
+```json
+{
+  "text": "Got it, thanks",
+  "chat": "Ops",
+  "reply_to_message_id": 1020,
+  "confirm": true
+}
+```
+
 Admin safety rules for `tg_add_group_member` and `tg_remove_group_member`:
 - `confirm` must be explicitly set to `true`.
 - target chat must be present in `TG_ADMIN_CHAT_WHITELIST`.
@@ -133,6 +151,43 @@ Admin safety rules for `tg_add_group_member` and `tg_remove_group_member`:
 - `caption` is optional and sent as the Telegram attachment caption.
 - response includes `caption`, `attachment_count`, and per-file metadata in `attachments` with `attachment_type`.
 
+`tg_download_attachment` behavior:
+- requires `message_id` and `output_dir`.
+- downloads the attachment from the target message into `output_dir`.
+- if `TG_FILE_DOWNLOAD_ROOTS` is set, resolved output directory must stay inside one of those directories.
+- if `TG_FILE_DOWNLOAD_ROOTS` is not set, `output_dir` must be absolute.
+- returns saved path and attachment metadata.
+
+`tg_read_messages` behavior:
+- returns messages in ascending id order.
+- `message_id` or `message_ids` returns exact Telegram messages by id.
+- `until` is an upper date bound; combine it with `since` to read an old time window instead of only recent messages.
+- `offset_id` reads older messages before the given Telegram message id.
+- includes `reactions` and `recent_reactions` when present.
+- includes `forwarded_from` with the original sender id, display name, and message date for forwarded messages; the field is `null` for regular messages.
+- includes `attachment_count` and `attachments` for messages with Telegram media.
+- each attachment entry may include `file_name`, `file_size`, `mime_type`, and `attachment_type` when Telegram exposes them.
+
+Example old window:
+
+```json
+{
+  "chat": "-1001234567890",
+  "since": "2026-01-15T17:00:00+00:00",
+  "until": "2026-01-15T17:30:00+00:00",
+  "limit": 100
+}
+```
+
+Example exact messages:
+
+```json
+{
+  "chat": "-1001234567890",
+  "message_ids": [1201, 1202]
+}
+```
+
 Example:
 
 ```json
@@ -144,6 +199,16 @@ Example:
   "caption": "Current MCP docs",
   "chat": "me",
   "confirm": true
+}
+```
+
+Example download:
+
+```json
+{
+  "chat": "example_user",
+  "message_id": 4321,
+  "output_dir": "/tmp/tg-downloads"
 }
 ```
 

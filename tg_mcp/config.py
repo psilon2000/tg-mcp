@@ -17,6 +17,7 @@ class Settings:
     write_chat_whitelist: tuple[str, ...]
     admin_chat_whitelist: tuple[str, ...]
     file_send_roots: tuple[Path, ...]
+    file_download_roots: tuple[Path, ...] = ()
 
 
 def load_settings() -> Settings:
@@ -36,6 +37,11 @@ def load_settings() -> Settings:
     file_send_roots = tuple(
         Path(item.strip()).expanduser().resolve()
         for item in os.getenv("TG_FILE_SEND_ROOTS", "").split(",")
+        if item.strip()
+    )
+    file_download_roots = tuple(
+        Path(item.strip()).expanduser().resolve()
+        for item in os.getenv("TG_FILE_DOWNLOAD_ROOTS", "").split(",")
         if item.strip()
     )
 
@@ -58,4 +64,5 @@ def load_settings() -> Settings:
         write_chat_whitelist=write_chat_whitelist,
         admin_chat_whitelist=admin_chat_whitelist,
         file_send_roots=file_send_roots,
+        file_download_roots=file_download_roots,
     )
