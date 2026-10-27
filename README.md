@@ -151,6 +151,13 @@ Admin safety rules for `tg_add_group_member` and `tg_remove_group_member`:
 - `caption` is optional and sent as the Telegram attachment caption.
 - response includes `caption`, `attachment_count`, and per-file metadata in `attachments` with `attachment_type`.
 
+Send rate limits (`tg_send_message`, `tg_send_file`):
+- sends use the user's personal account; on 27.10.2026 a batch to Saved Messages hit FloodWait twice: after 21 messages in 86 s (wait 212 s) and after 23 messages in 108 s (wait 184 s).
+- an album of N files in `tg_send_file` counts as N messages.
+- for batches send at most ~6 messages in a row and pause ~45 s; merge many documents into a few PDF bundles with a table of contents instead of dozens of separate files.
+- `reply_to_message_id` lets you attach copy-ready text to an explanatory message, so the user copies only the text.
+- the same rules are exposed to every MCP client via the server `instructions` and the send tool descriptions.
+
 `tg_download_attachment` behavior:
 - requires `message_id` and `output_dir`.
 - downloads the attachment from the target message into `output_dir`.

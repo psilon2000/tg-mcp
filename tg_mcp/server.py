@@ -12,7 +12,17 @@ from .telegram_client import TelegramBridge
 
 settings = load_settings()
 bridge = TelegramBridge(settings)
-mcp = FastMCP("tg-mcp")
+mcp = FastMCP(
+    "tg-mcp",
+    instructions=(
+        "Sends go through the user's personal Telegram account. Bursts of about 20 messages "
+        "within 1.5-2 minutes trigger FloodWait (observed waits 184-212 s, repeated floods may "
+        "lengthen it). An album of N files in tg_send_file counts as N messages. For batches: "
+        "send at most ~6 messages in a row, then pause ~45 s; merge many documents into a few "
+        "PDF bundles with a table of contents instead of dozens of files; use "
+        "reply_to_message_id to attach copy-ready text to an explanatory message."
+    ),
+)
 
 
 def _resolve_chat(chat: str | None) -> str:
@@ -144,7 +154,10 @@ async def tg_send_message(
     reply_to_message_id: int | None = None,
     confirm: bool = False,
 ) -> dict[str, Any]:
-    """Send message to Telegram chat/channel (whitelist + confirm required)."""
+    """Send message to Telegram chat/channel (whitelist + confirm required).
+
+    Rate limit: ~20 messages in 1.5-2 min trigger FloodWait; in batches pause ~45 s after every ~6 messages.
+    """
     target = _resolve_chat(chat)
     _ensure_write_allowed(target, confirm)
     result = await bridge.send_message(
@@ -190,7 +203,10 @@ async def tg_send_file(
     chat: str | None = None,
     confirm: bool = False,
 ) -> dict[str, Any]:
-    """Send file attachment to Telegram chat/channel (whitelist + confirm required)."""
+    """Send file attachment to Telegram chat/channel (whitelist + confirm required).
+
+    An album of N files counts as N messages toward FloodWait (~20 per 1.5-2 min); bundle many documents into a few PDFs.
+    """
     target = _resolve_chat(chat)
     _ensure_write_allowed(target, confirm)
     resolved_paths = _resolve_send_file_paths(file_path=file_path, file_paths=file_paths)
