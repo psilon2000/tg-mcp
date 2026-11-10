@@ -32,6 +32,7 @@ class TgMessage:
     recent_reactions: list[dict[str, Any]]
     attachment_count: int
     attachments: list[dict[str, Any]]
+    reply_to: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -454,7 +455,29 @@ def _build_tg_message(message: Any) -> TgMessage:
         recent_reactions=_serialize_recent_reactions(getattr(message, "reactions", None)),
         attachment_count=len(attachments),
         attachments=attachments,
+        reply_to=_serialize_reply_to(message),
     )
+
+
+def _serialize_reply_to(message: Any) -> dict[str, Any] | None:
+    """Keep reply/quote context from the fetched message; never fetch another chat implicitly."""
+    header = getattr(message, "reply_to", None)
+    if header is None:
+        return None
+    result: dict[str, Any] = {}
+    for name in ("reply_to_msg_id", "reply_to_top_id", "quote_offset"):
+        value = getattr(header, name, None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            result[name] = value
+    quote = getattr(header, "quote_text", None)
+    if isinstance(quote, str):
+        result["quote_text"] = quote
+    peer = getattr(header, "reply_to_peer_id", None)
+    if peer is not None:
+        peer_id = _get_chat_id(peer)
+        if peer_id:
+            result["reply_to_chat_id"] = peer_id
+    return result or None
 
 
 def _serialize_forwarded_from(message: Any) -> dict[str, Any] | None:
